@@ -1,19 +1,14 @@
 import inspect
 from collections.abc import Callable
-from typing import Annotated, Any, ParamSpec, Protocol, Self, TypeVar, get_origin, get_type_hints
+from typing import Annotated, Any, Protocol, Self, TypeIs, get_origin, get_type_hints
+
+from py_templatify._tags._base import Option, TagBase
 
 
-# from pydantic import BaseModel
-
-
-_PS = ParamSpec('_PS')
-CTX = TypeVar('CTX')  # , bound=BaseModel)
-
-
-class WrappedProto(Protocol[_PS, CTX]):
+class WrappedProto[**_PS, CTX](Protocol):
     __tpl: str
     __signature: inspect.Signature
-    __templaterr: 'templatify[CTX]'
+    __templatify: 'templatify[CTX]'
     __ctx: CTX | None
     __wrapped__: Callable[_PS, str]
 
@@ -22,39 +17,83 @@ class WrappedProto(Protocol[_PS, CTX]):
     def __call__(self, *args: _PS.args, **kwargs: _PS.kwargs) -> str: ...
 
 
-class Wrapped(WrappedProto[_PS, CTX]):
+def is_option(v: object) -> TypeIs[type[Option[Any]] | Option[Any]]:
+    return isinstance(v, Option) or (inspect.isclass(v) and issubclass(v, Option))
+
+
+class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
     __wrapped__: Callable[_PS, str]
 
     def __init__(self, templatify: 'templatify[CTX]', signature: inspect.Signature, func: Callable[_PS, Any], tpl: str):
-        self.__ctx = None
-        self.__templaterr = templatify
+        self.__ctx: CTX | None = None
+        self.__templatify = templatify
         self.__tpl = tpl
         self.__signature = signature
         self.__func = func
 
     def ctx(self: Self, context: CTX) -> Self:
-        self._ctx = context
+        self.__ctx = context
         return self
 
     def __call__(self, *args: _PS.args, **kwargs: _PS.kwargs) -> str:
         arguments, kwd_args = self._get_format_kwargs(bound_args=self.__signature.bind(*args, **kwargs))
-
         for kwd, value in kwd_args.items():
             parameter = self.__signature.parameters.get(kwd, None)
-            if not parameter or get_origin(annotation := parameter.annotation) is not Annotated:
+            if not parameter:
                 continue
 
-            new_value = value
-            for meta in annotation.__metadata__:
-                if not callable(meta):
-                    continue
+            annotation = self._get_annotation_from_parameter(parameter=parameter)
+            if not annotation:
+                continue
 
-                new_value = meta(value)
+            kwd_args[kwd] = self._get_parameter_value_after_transforms(value=value, annotation=annotation)
 
-            kwd_args[kwd] = new_value
-
-        print(f'{arguments=}, {kwd_args=}')
         return self.__tpl.format(*arguments, **kwd_args)
+
+    def _get_parameter_value_after_transforms(self, value: Any, annotation: Any) -> Any:
+        new_value: Any = value
+        for meta in annotation.__metadata__:
+            if not callable(meta):
+                continue
+
+            if is_option(meta):
+                _opt_instance = meta() if not isinstance(meta, Option) else meta
+                new_value = _opt_instance(value)
+
+                is_do_break = _opt_instance.is_empty and not _opt_instance.resume
+
+                if is_do_break:
+                    break
+
+                continue
+
+            new_value = meta(new_value)
+
+            # If it is still an instance of a TagBase, then type annotation was of a class type and not an instance
+            if isinstance(new_value, TagBase):
+                new_value = new_value()
+                continue
+
+        return new_value
+
+    def _get_annotation_from_parameter(self, parameter: Any) -> Any | None:
+        # handle type alias annotation
+        type_alias_origin = self._get_type_alias_origin(parameter.annotation)
+        if type_alias_origin is not None:
+            return type_alias_origin
+
+        # handle annotated straight up
+        if get_origin(annotation := parameter.annotation) is Annotated:
+            return annotation
+
+        return None
+
+    @staticmethod
+    def _get_type_alias_origin(param_annotation: Any) -> None | Any:
+        try:
+            return alias_original if get_origin(alias_original := param_annotation.__value__) is Annotated else None
+        except Exception:
+            return None
 
     def _get_format_kwargs(self, bound_args: inspect.BoundArguments) -> tuple[tuple[Any, ...], dict[str, Any]]:
         bound_args.apply_defaults()

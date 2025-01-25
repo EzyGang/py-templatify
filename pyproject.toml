@@ -1,13 +1,32 @@
 [project]
 name = "py-templatify"
-version = "0.0.1"
-description = ""
+version = "0.1.0"
+description = "Minimalist Python template generation with type-safe annotations. Perfect for chat bots and LLM prompts."
+license = "MIT"
 readme = "README.md"
 authors = [
     { name = "Galtozzy", email = "galtozzy+git@gmail.com" }
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = []
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python",
+    "Typing :: Typed",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+
+[project.urls]
+homepage = "https://github.com/EzyGang/py-templatify"
+repository = "https://github.com/EzyGang/py-templatify"
 
 [tool.taskipy.tasks]
 format-and-lint = "task ruff && task mypy-lint"
