@@ -1,6 +1,10 @@
----  
+Py-Templatify
+
+---
+
 **Documentation**: https://py-templatify.readthedocs.io/latest/  
-**Source Code**: https://github.com/YourUsername/py-templatify  
+**Source Code**: https://github.com/YourUsername/py-templatify/
+
 ---  
 
 **Py-Templatify** is a lightweight library designed for developers who want a straightforward and efficient way to generate simple string 
