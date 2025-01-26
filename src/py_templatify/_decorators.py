@@ -1,6 +1,13 @@
 import inspect
+import sys
 from collections.abc import Callable
-from typing import Annotated, Any, Protocol, Self, TypeIs, get_origin, get_type_hints
+from typing import Annotated, Any, Protocol, Self, get_origin, get_type_hints
+
+
+if sys.version_info >= (3, 13):
+    from typing import TypeIs
+else:
+    from typing_extensions import TypeIs
 
 from py_templatify._tags._base import Option, TagBase
 

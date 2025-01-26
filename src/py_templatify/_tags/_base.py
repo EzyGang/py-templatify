@@ -1,7 +1,12 @@
+import sys
 from collections.abc import Sequence
 from typing import cast
 
-from typing_extensions import TypeIs
+
+if sys.version_info >= (3, 13):
+    from typing import TypeIs
+else:
+    from typing_extensions import TypeIs
 
 from py_templatify._tags._types import SupportsBool, SupportsIter
 
