@@ -34,7 +34,7 @@ and other scenarios where concise and easily managed string outputs are required
 ## Table of Contents
 - [Installation](#installation)
 - [How to use](#how-to-use)
-- [Basic examples](#basic-examples)
+- [Basic examples](#basic-example)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -69,7 +69,7 @@ This is where your template message goes.
 Here is the Awesome argument!
 ```
 
-### Example Usage
+## Basic example
 Here's a generic example demonstrating the functionality of the library:
 
 ```python
@@ -145,7 +145,6 @@ Note 2: Note number 2
 Subscription Active: Yes
 ```
 
-## Basic examples
 ### Using Tags
 Utilize the built-in tags like `Bold`, `Link`, and `Code` to format your templates effortlessly. 
 Basic Markdown formatting is shipped by default, but you can extend and create custom tags using the provided base classes.
