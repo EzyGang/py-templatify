@@ -1,14 +1,12 @@
 # Py-Templatify
 
----
-
-**Documentation**: WIP
-
-**Source Code**: https://github.com/EzyGang/py-templatify/
-
-**Roadmap**: WIP
-
----  
+> [!WARNING]
+> ⚠️ Alpha Release Notice
+> **Py-Templatify** is currently in its alpha stage of development. 
+> As such, it is subject to change and may contain bugs or incomplete features.
+> I recommend using this library in non-critical applications or 
+> for experimental purposes only. 
+> Your feedback is invaluable as we continue to improve and stabilize the library! 
 
 **Py-Templatify** is a lightweight library designed for developers who want a straightforward and efficient way to generate simple string 
 templates in Python applications. 
