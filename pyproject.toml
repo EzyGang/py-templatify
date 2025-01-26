@@ -22,13 +22,13 @@ classifiers = [
     "Typing :: Typed",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "License :: OSI Approved :: MIT License",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 
 [project.urls]
-homepage = "https://github.com/EzyGang/py-templatify"
-repository = "https://github.com/EzyGang/py-templatify"
+Homepage = "https://github.com/EzyGang/py-templatify"
+Repository = "https://github.com/EzyGang/py-templatify"
+
 
 [tool.taskipy.tasks]
 format-and-lint = "task ruff && task mypy-lint"
@@ -88,8 +88,8 @@ exclude = [
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
 
 [dependency-groups]
 dev = [
