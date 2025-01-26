@@ -3,9 +3,7 @@ name: Build and Publish
 on: workflow_dispatch
 permissions:
   id-token: write
-  
-env:
-  UV_FROZEN: 1  
+
 
 jobs:
   build-and-publish:
@@ -30,7 +28,7 @@ jobs:
       - name: build
         run: uv build
       - name: Publish to PyPi
-        uses: pypa/gh-action-pypi-publish@v1.12.2
+        uses: pypa/gh-action-pypi-publish@release/v1
       - name: Sign published artifacts
         uses: sigstore/gh-action-sigstore-python@v3.0.0
         with:
