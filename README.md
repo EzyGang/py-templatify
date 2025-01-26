@@ -2,8 +2,9 @@ Py-Templatify
 
 ---
 
-**Documentation**: https://py-templatify.readthedocs.io/latest/  
-**Source Code**: https://github.com/YourUsername/py-templatify/
+**Documentation**: WIP
+**Source Code**: https://github.com/EzyGang/py-templatify/
+**Roadmap**: WIP
 
 ---  
 
