@@ -33,7 +33,7 @@ and other scenarios where concise and easily managed string outputs are required
 ## Table of Contents
 - [Installation](#installation)
 - [How to use](#how-to-use)
-- [Basic examples](#basic-example)
+- [Examples](#examples)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -68,9 +68,10 @@ This is where your template message goes.
 Here is the Awesome argument!
 ```
 
-## Basic example
+## Examples
 Here's a generic example demonstrating the functionality of the library:
 
+### Annotating arguments of a function
 ```python
 from decimal import Decimal
 from typing import Annotated, Any
@@ -144,8 +145,74 @@ Note 2: Note number 2
 Subscription Active: Yes
 ```
 
+### Using data classes
+You can also use data classes to define the structure of your template arguments,
+this way formatting annotations live in the class definition:
+
+```python
+@dataclass
+class AdditionalUserInfo:
+    user_id: CodeTag[int]
+    user_type: ItalicTag[str]
+    user_role: BoldTag[str]
+
+
+@dataclass
+class User:
+    username: BoldTag[str]
+    additional_info: AdditionalUserInfo
+    user_rep: Decimal
+
+
+@templatify(description='Data class template')
+def data_class_user_info_template(user: User) -> None:
+    """
+    Username: {user.username}
+    Reputation: {user.user_rep}
+
+    Additional User Info::
+    - User ID: {user.additional_info.user_id}
+    - User Type: {user.additional_info.user_type}
+    - User Role: {user.additional_info.user_role}
+    """
+    
+
+if __name__ == '__main__':
+    print(
+        data_class_user_info_template(
+            user=User(
+                username='john_doe',
+                additional_info=AdditionalUserInfo(
+                    user_id=123,
+                    user_type='Admin',
+                    user_role='Owner',
+                ),
+                user_rep=Decimal('4.5'),
+            )
+        )
+    )
+```
+
+After running the above:
+```
+Username: **john_doe**
+Reputation: 4.5
+
+Additional User Info::
+- User ID: `123`
+- User Type: *Admin*
+- User Role: **Owner**
+```
+The output will be formatted according to the tags specified in the data class.
+
 ### Using Tags
-Utilize the built-in tags like `Bold`, `Link`, and `Code` to format your templates effortlessly. 
+Utilize the built-in tags like `Bold`, `Link`, and `Code` to format your templates effortlessly.
+
+Full list is available in the [Markdown Tags](https://github.com/EzyGang/py-templatify/blob/main/src/py_templatify/markdown/tags.py) file.
+
+Shortcuts for markdown tags are also available in the [Markdown Shortcuts](https://github.com/EzyGang/py-templatify/blob/main/src/py_templatify/markdown/shortcuts.py) file.
+
+
 Basic Markdown formatting is shipped by default, but you can extend and create custom tags using the provided base classes.
 
 ## Contributing
