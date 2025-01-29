@@ -62,7 +62,7 @@ print(your_function(arg1='Awesome argument'))
 ```
 
 After running the above you'll get the following output:
-```
+```markdown
 This is where your template message goes.
 
 Here is the Awesome argument!
@@ -128,7 +128,7 @@ if __name__ == '__main__':
 ```
 
 After running the above:
-```
+```markdown
 User Information:
 
 Welcome, **john_doe**!
@@ -194,7 +194,7 @@ if __name__ == '__main__':
 ```
 
 After running the above:
-```
+```markdown
 Username: **john_doe**
 Reputation: 4.5
 
@@ -208,7 +208,7 @@ The output will be formatted according to the tags specified in the data class.
 ### Using Tags
 Utilize the built-in tags like `Bold`, `Link`, and `Code` to format your templates effortlessly.
 
-Full list is available in the [Markdown Tags](https://github.com/EzyGang/py-templatify/blob/main/src/py_templatify/markdown/tags.py) file.
+The full list is available in the [Markdown Tags](https://github.com/EzyGang/py-templatify/blob/main/src/py_templatify/markdown/tags.py) file.
 
 Shortcuts for markdown tags are also available in the [Markdown Shortcuts](https://github.com/EzyGang/py-templatify/blob/main/src/py_templatify/markdown/shortcuts.py) file.
 
