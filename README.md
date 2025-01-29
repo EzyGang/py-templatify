@@ -146,7 +146,7 @@ Subscription Active: Yes
 ```
 
 ### Using data classes
-You can also use data classes to define the structure of your template arguments,
+You can also use data classes or pydantic models to define the structure of your template arguments,
 this way formatting annotations live in the class definition:
 
 ```python
