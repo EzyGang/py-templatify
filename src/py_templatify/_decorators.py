@@ -6,8 +6,9 @@ from py_templatify._types import Wrapped
 
 
 class templatify[CTX]:
-    def __init__(self, description: str | None = None) -> None:
+    def __init__(self, description: str | None = None, escape_symbols: str | None = None) -> None:
         self._description = description
+        self._escape_symbols = escape_symbols
 
     def __call__[**_P, _R](
         self,
@@ -16,9 +17,9 @@ class templatify[CTX]:
         signature = self._get_typed_signature(_func)
 
         if _func.__doc__ is None:
-            raise RuntimeError('Template string is missing')
+            raise RuntimeError('Template string is not provided')
 
-        wrapped = Wrapped[_P, CTX](func=_func, tpl=_func.__doc__, signature=signature)
+        wrapped = Wrapped[_P, CTX](func=_func, escape=self._escape_symbols, tpl=_func.__doc__, signature=signature)
         wrapped.__doc__ = self._description
 
         return wrapped

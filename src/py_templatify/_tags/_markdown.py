@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from py_templatify._tags._base import UNSET, IterableTagBase, TagBase, Unset, is_unset
 from py_templatify._tags._types import SupportsIter
 
@@ -66,9 +68,15 @@ class CodeBlock[T](TagBase[T]):
     post = '\n```'
 
     def __init__(
-        self, val: T | Unset = UNSET, pre: str | Unset = UNSET, post: str | Unset = UNSET, /, code: str = ''
+        self,
+        val: T | Unset = UNSET,
+        escape: Callable[[str], str] | Unset = UNSET,
+        pre: str | Unset = UNSET,
+        post: str | Unset = UNSET,
+        /,
+        code: str = '',
     ) -> None:
-        super().__init__(val, pre, post)
+        super().__init__(val, escape, pre, post)
         self.code = code
 
     def __str__(self) -> str:
@@ -78,7 +86,7 @@ class CodeBlock[T](TagBase[T]):
         if self.code and '\n' not in self.code:
             self.code += '\n'
 
-        return f'{self.pre}{self.code}{self._val}{self.post}'
+        return f'{self.pre}{self.code if self.code else "\n"}{self._val}{self.post}'
 
 
 class Link[T](TagBase[tuple[T, T]]):

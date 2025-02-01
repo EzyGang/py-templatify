@@ -1,11 +1,15 @@
 import inspect
+import logging
+import random
 import re
+import string
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from copy import copy
+from functools import partial
 from typing import Annotated, Any, Protocol, Self, get_origin
 
-from py_templatify._tags._base import Option, TagBase
+from py_templatify._tags._base import UNSET, Option, TagBase
 
 
 if sys.version_info >= (3, 13):
@@ -14,7 +18,9 @@ else:
     from typing_extensions import TypeIs
 
 
+logger = logging.getLogger('py-templatify')
 _regex = re.compile(r'{(.+\..+)}')
+_placehold_regex = re.compile(r'(\{[^\}]+\})')
 
 
 class WrappedProto[**_PS, CTX](Protocol):
@@ -39,12 +45,17 @@ def is_tag(v: object) -> TypeIs[type[TagBase[Any]] | TagBase[Any]]:
 class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
     __wrapped__: Callable[_PS, str]
 
-    def __init__(self, signature: inspect.Signature, func: Callable[_PS, Any], tpl: str):
+    def __init__(self, signature: inspect.Signature, escape: str | None, func: Callable[_PS, Any], tpl: str):
         self.__ctx: CTX | None = None
 
         self.__tpl = tpl
         self.__signature = signature
         self.__func = func
+
+        self.__escape_symbols = set(escape) if escape else set()
+        self.__rand_from = list(set(string.punctuation + string.ascii_letters) - self.__escape_symbols)
+        self.__escape_regex = re.compile(f'({"|".join(f"\\{symbol}" for symbol in self.__escape_symbols)})')
+        self.__escape_func = staticmethod(self._escape_func_factory())
 
         self.__used_attributes = re.findall(_regex, self.__tpl)
 
@@ -54,8 +65,8 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
 
     def __call__(self, *args: _PS.args, **kwargs: _PS.kwargs) -> str:
         arguments, kwd_args = self._get_format_kwargs(bound_args=self.__signature.bind(*args, **kwargs))
-        _tpl = copy(self.__tpl)
 
+        _tpl = self._escape_tpl()
         _tpl = self._update_kwd_args_from_attributes(kwd_args=kwd_args, tpl=_tpl)
         self._update_kwd_args_with_annotations(kwd_args=kwd_args)
 
@@ -71,13 +82,7 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
                 continue
 
             annotation = self._get_annotation_from_parameter(parameter=param)
-            kwd_args[param.name] = (
-                self._get_parameter_value_after_transforms(
-                    value=value, annotation=self._get_annotation_from_parameter(parameter=param)
-                )
-                if annotation
-                else value
-            )
+            kwd_args[param.name] = self._get_parameter_value_after_transforms(value=value, annotation=annotation)
 
             tpl = tpl.replace(f'{{{field}}}', f'{{{param.name}}}')
 
@@ -90,36 +95,49 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
                 continue
 
             annotation = self._get_annotation_from_parameter(parameter=parameter)
-            if not annotation:
-                continue
-
             kwd_args[kwd] = self._get_parameter_value_after_transforms(value=value, annotation=annotation)
 
-    def _get_parameter_value_after_transforms(self, value: Any, annotation: Any) -> Any:
+    def _get_parameter_value_after_transforms(self, value: Any, annotation: Any | None) -> Any:
         new_value: Any = value
-        for meta in annotation.__metadata__:
+
+        _is_escaped = False
+        if annotation is not None and annotation.__metadata__:
+            _is_escaped, new_value = self._process_annotation_metadata(
+                new_value=new_value, metadata=annotation.__metadata__
+            )
+
+        if not _is_escaped:
+            new_value = self.__escape_func(str(new_value))
+
+        return new_value
+
+    def _process_annotation_metadata(self, new_value: Any, metadata: Iterable[Any]) -> tuple[bool, Any]:
+        _is_escaped = False
+        for meta in metadata:
+            escape_func = self.__escape_func if not _is_escaped else UNSET
             if not (inspect.isfunction(meta) or is_option(meta) or is_tag(meta)):
                 continue
 
             if is_option(meta):
                 _opt_instance = meta() if not isinstance(meta, Option) else meta
-                new_value = _opt_instance(value)
+                new_value = _opt_instance(new_value, escape=escape_func)
+                _is_escaped = True
 
-                is_do_break = _opt_instance.is_empty and not _opt_instance.resume
-
-                if is_do_break:
+                if _opt_instance.is_empty and not _opt_instance.resume:
                     break
 
                 continue
 
+            if is_tag(meta):
+                _tag_instance = meta() if not isinstance(meta, TagBase) else meta
+                new_value = _tag_instance(new_value, escape=escape_func)
+
+                _is_escaped = True
+                continue
+
             new_value = meta(new_value)
 
-            # If it is still an instance of a TagBase,
-            # then type annotation was of a class type and not an instance or a function
-            if isinstance(new_value, TagBase):
-                new_value = new_value()
-
-        return new_value
+        return _is_escaped, new_value
 
     def _get_annotation_from_parameter(self, parameter: inspect.Parameter) -> Any | None:
         # handle type alias annotation
@@ -174,6 +192,34 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
             annotations[field] = (param, current_val)
 
         return annotations
+
+    def _escape_func_factory(self) -> Callable[[str], str]:
+        def _escape_str(s: str, regex: re.Pattern[str]) -> str:
+            return regex.sub(r'\\\1', s)
+
+        if not self.__escape_symbols:
+            return lambda x: str(x)
+
+        return partial(_escape_str, regex=self.__escape_regex)
+
+    def _escape_tpl(self) -> str:
+        _tpl = copy(self.__tpl)
+        if not self.__escape_symbols:
+            return _tpl
+
+        _placeholders: dict[str, int] = {}
+        for i, match in enumerate(_placehold_regex.finditer(_tpl), start=0):
+            _placeholders[match.group(0)] = i
+
+        _prefix = ''.join(list(random.sample(self.__rand_from, 3)))
+        for placeholder, i in _placeholders.items():
+            _tpl = _tpl.replace(placeholder, f'{_prefix}{i}')
+
+        _tpl = self.__escape_func(_tpl)
+        for placeholder, i in _placeholders.items():
+            _tpl = _tpl.replace(f'{_prefix}{i}', placeholder)
+
+        return _tpl
 
     @staticmethod
     def _get_type_alias_origin(param_annotation: Any) -> None | Any:
