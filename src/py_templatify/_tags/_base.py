@@ -6,7 +6,7 @@ from typing import Any, cast
 if sys.version_info >= (3, 13):
     from typing import TypeIs
 else:
-    from typing_extensions import TypeIs
+    from typing_extensions import TypeIs  # pragma: no cover
 
 from py_templatify._tags._types import SupportsBool, SupportsIter
 
@@ -128,7 +128,7 @@ class Option[T]:
         self,
         val: T | None | Unset = UNSET,
         escape: Callable[[str], str] | Unset = UNSET,
-        /,
+        *,
         if_none: str = '',
         resume: bool = False,
     ) -> None:
@@ -142,7 +142,7 @@ class Option[T]:
         return True if is_unset(self._val) or self._val is None else False
 
     def __call__(self, val: T | Unset | None = UNSET, escape: Callable[[str], str] | Unset = UNSET) -> T | str:
-        self._val = val
+        self._val = val if not is_unset(val) else self._val
         self.escape_func = escape if not is_unset(escape) else self.escape_func
 
         return self.escape_func(self.if_none) if self.is_empty else cast(T, self._val)
@@ -158,7 +158,7 @@ class Boolean[T: SupportsBool](TagBase[T]):
         escape: Callable[[str], str] | Unset = UNSET,
         pre: str | Unset = UNSET,
         post: str | Unset = UNSET,
-        /,
+        *,
         if_true: Unset | str = UNSET,
         if_false: Unset | str = UNSET,
     ) -> None:

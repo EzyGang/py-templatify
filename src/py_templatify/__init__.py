@@ -9,5 +9,5 @@ try:
     from importlib.metadata import version
 
     __version__ = version('py-templatify')
-except ModuleNotFoundError:
-    __version__ = f'No version available for {__name__}'
+except ModuleNotFoundError:  # pragma: no cover
+    __version__ = f'No version available for {__name__}'  # pragma: no cover

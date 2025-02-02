@@ -9,6 +9,7 @@ dist
 site
 .coverage
 coverage.xml
+coverage.json
 .netlify
 test.db
 log.txt
@@ -22,6 +23,7 @@ venv
 docs.zip
 archive.zip
 pyrightconfig.json
+.pdm-build
 
 # vim temporary files
 *~

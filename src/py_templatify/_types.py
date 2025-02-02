@@ -7,31 +7,31 @@ import sys
 from collections.abc import Callable, Iterable
 from copy import copy
 from functools import partial
-from typing import Annotated, Any, Protocol, Self, get_origin
+from typing import Annotated, Any, Protocol, get_origin
 
 from py_templatify._tags._base import UNSET, Option, TagBase
 
 
 if sys.version_info >= (3, 13):
-    from typing import TypeIs
+    from typing import TypeIs  # pragma: no cover
 else:
-    from typing_extensions import TypeIs
+    from typing_extensions import TypeIs  # pragma: no cover
 
 
 logger = logging.getLogger('py-templatify')
-_regex = re.compile(r'{(.+\..+)}')
-_placehold_regex = re.compile(r'(\{[^\}]+\})')
+_regex = re.compile(r'{(.+?\..+?)}')
+_placehold_regex = re.compile(r'(\{[^\}]+?\})')
 
 
 class WrappedProto[**_PS, CTX](Protocol):
-    __tpl: str
-    __signature: inspect.Signature
-    __ctx: CTX | None
+    _tpl: str
+    _signature: inspect.Signature
+    _ctx: CTX | None
     __wrapped__: Callable[_PS, str]
 
-    def ctx(self: Self, context: CTX) -> Self: ...
+    # def ctx(self: Self, context: CTX) -> Self: ...  # pragma: no cover
 
-    def __call__(self, *args: _PS.args, **kwargs: _PS.kwargs) -> str: ...
+    def __call__(self, *args: _PS.args, **kwargs: _PS.kwargs) -> str: ...  # pragma: no cover
 
 
 def is_option(v: object) -> TypeIs[type[Option[Any]] | Option[Any]]:
@@ -46,25 +46,25 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
     __wrapped__: Callable[_PS, str]
 
     def __init__(self, signature: inspect.Signature, escape: str | None, func: Callable[_PS, Any], tpl: str):
-        self.__ctx: CTX | None = None
+        self._ctx: CTX | None = None
 
-        self.__tpl = tpl
-        self.__signature = signature
-        self.__func = func
+        self._tpl = tpl
+        self._signature = signature
+        self._func = func
 
-        self.__escape_symbols = set(escape) if escape else set()
-        self.__rand_from = list(set(string.punctuation + string.ascii_letters) - self.__escape_symbols)
-        self.__escape_regex = re.compile(f'({"|".join(f"\\{symbol}" for symbol in self.__escape_symbols)})')
-        self.__escape_func = staticmethod(self._escape_func_factory())
+        self._escape_symbols = set(escape) if escape else set()
+        self._rand_from = list(set(string.punctuation + string.ascii_letters) - self._escape_symbols)
+        self._escape_regex = re.compile(f'({"|".join(f"\\{symbol}" for symbol in self._escape_symbols)})')
+        self._escape_func = staticmethod(self._escape_func_factory())
 
-        self.__used_attributes = re.findall(_regex, self.__tpl)
+        self._used_attributes = re.findall(_regex, self._tpl)
 
-    def ctx(self: Self, context: CTX) -> Self:
-        self.__ctx = context
-        return self
+    # def ctx(self: Self, context: CTX) -> Self:
+    #     self._ctx = context
+    #     return self
 
     def __call__(self, *args: _PS.args, **kwargs: _PS.kwargs) -> str:
-        arguments, kwd_args = self._get_format_kwargs(bound_args=self.__signature.bind(*args, **kwargs))
+        arguments, kwd_args = self._get_format_kwargs(bound_args=self._signature.bind(*args, **kwargs))
 
         _tpl = self._escape_tpl()
         _tpl = self._update_kwd_args_from_attributes(kwd_args=kwd_args, tpl=_tpl)
@@ -73,7 +73,7 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
         return _tpl.format(*arguments, **kwd_args)
 
     def _update_kwd_args_from_attributes(self, kwd_args: dict[str, Any], tpl: str) -> str:
-        if not self.__used_attributes:
+        if not self._used_attributes:
             return tpl
 
         param_values = self._get_parameter_values_from_objs_for_fields(kwd_args=kwd_args)
@@ -90,7 +90,7 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
 
     def _update_kwd_args_with_annotations(self, kwd_args: dict[str, Any]) -> None:
         for kwd, value in kwd_args.items():
-            parameter = self.__signature.parameters.get(kwd, None)
+            parameter = self._signature.parameters.get(kwd, None)
             if not parameter:
                 continue
 
@@ -107,14 +107,14 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
             )
 
         if not _is_escaped:
-            new_value = self.__escape_func(str(new_value))
+            new_value = self._escape_func(str(new_value))
 
         return new_value
 
     def _process_annotation_metadata(self, new_value: Any, metadata: Iterable[Any]) -> tuple[bool, Any]:
         _is_escaped = False
         for meta in metadata:
-            escape_func = self.__escape_func if not _is_escaped else UNSET
+            escape_func = self._escape_func if not _is_escaped else UNSET
             if not (inspect.isfunction(meta) or is_option(meta) or is_tag(meta)):
                 continue
 
@@ -166,7 +166,7 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
         annotations: dict[str, tuple[inspect.Parameter | None, Any | None]] = {}
 
         # Going through all the attribute accesses that are used in the template
-        for field in self.__used_attributes:
+        for field in self._used_attributes:
             if '.' not in field:
                 continue
 
@@ -197,25 +197,25 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
         def _escape_str(s: str, regex: re.Pattern[str]) -> str:
             return regex.sub(r'\\\1', s)
 
-        if not self.__escape_symbols:
+        if not self._escape_symbols:
             return lambda x: str(x)
 
-        return partial(_escape_str, regex=self.__escape_regex)
+        return partial(_escape_str, regex=self._escape_regex)
 
     def _escape_tpl(self) -> str:
-        _tpl = copy(self.__tpl)
-        if not self.__escape_symbols:
+        _tpl = copy(self._tpl)
+        if not self._escape_symbols:
             return _tpl
 
         _placeholders: dict[str, int] = {}
         for i, match in enumerate(_placehold_regex.finditer(_tpl), start=0):
             _placeholders[match.group(0)] = i
 
-        _prefix = ''.join(list(random.sample(self.__rand_from, 3)))
+        _prefix = ''.join(list(random.sample(self._rand_from, 3)))
         for placeholder, i in _placeholders.items():
             _tpl = _tpl.replace(placeholder, f'{_prefix}{i}')
 
-        _tpl = self.__escape_func(_tpl)
+        _tpl = self._escape_func(_tpl)
         for placeholder, i in _placeholders.items():
             _tpl = _tpl.replace(f'{_prefix}{i}', placeholder)
 

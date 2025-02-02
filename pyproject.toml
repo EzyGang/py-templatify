@@ -1,18 +1,18 @@
 [project]
 name = "py-templatify"
-version = "0.2.3"
+version = "0.2.4"
 description = "Minimalist Python template generation with type-safe annotations. Perfect for chat bots and LLM prompts."
 license = "MIT"
 readme = "README.md"
 authors = [
     { name = "Galtozzy", email = "galtozzy+git@gmail.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.12,<4"
 dependencies = [
     "typing-extensions>=4.12.2 ; python_full_version < '3.13'",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Information Technology",
     "Intended Audience :: System Administrators",
     "Intended Audience :: Developers",
@@ -32,16 +32,16 @@ Repository = "https://github.com/EzyGang/py-templatify"
 
 [tool.taskipy.tasks]
 format-and-lint = "task ruff && task mypy-lint"
-ruff = "ruff format ./src/ && ruff check ./src/ --fix --unsafe-fixes"
+ruff = "ruff format ./src/ ./tests/ && ruff check ./src/ ./tests/ --fix --unsafe-fixes"
 
+tests = "pytest tests/ -vvv -s"
 ruff-lint = "ruff check ./src"
 mypy-lint = "mypy --install-types --non-interactive ./src/"
 
 [tool.ruff]
 line-length = 120
 extend-exclude = ["site-packages", "*.pyi"]
-target-version = 'py311'
-
+target-version = 'py312'
 
 [tool.ruff.lint]
 fixable = ["ALL"]
@@ -71,7 +71,7 @@ max-complexity = 6
 [tool.ruff.lint.isort]
 split-on-trailing-comma = false
 lines-after-imports = 2
-known-first-party = ["app"]
+known-first-party = ["py_templatify"]
 
 [tool.ruff.lint.pyupgrade]
 # Preserve types, even if a file imports `from __future__ import annotations`.
@@ -87,14 +87,55 @@ exclude = [
     'test_',
 ]
 
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = [
+    '--strict-markers',
+    '--strict-config',
+    '--tb=short',
+    '--cov=src/py_templatify',
+    '--cov-branch',
+    '--cov-report=term-missing:skip-covered',
+    '--cov-report=json',
+    '--cov-fail-under=80',
+]
+python_files = "test*.py"
+# Directories that are not visited by pytest collector:
+norecursedirs = "*.egg .eggs dist build docs .tox .git __pycache__ config docker etc"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+# Coverage configuration:
+# https://coverage.readthedocs.io/en/latest/config.html
+omit = []
+concurrency = ['thread']
+
+
+[tool.coverage.report]
+omit = []
+exclude_lines = [
+    'pragma: no cover',
+    '@overload',
+    '@abstract',
+    'def __repr__',
+    'raise AssertionError',
+    'raise NotImplementedError',
+    'if __name__ == .__main__.:',
+    '__all__',
+    'if TYPE_CHECKING:',
+]
+
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
 [dependency-groups]
 dev = [
+    "coverage>=7.6.10",
     "mypy>=1.14.1",
+    "pytest-cov>=6.0.0",
     "pytest>=8.3.4",
     "ruff>=0.9.2",
     "taskipy>=1.14.1",
+    "pytest-mock>=3.14.0",
 ]

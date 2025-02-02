@@ -1,9 +1,9 @@
 # Py-Templatify
 
 > [!WARNING]
-> ⚠️ Alpha Release Notice
+> ⚠️ Beta Release Notice
 >
-> **Py-Templatify** is currently in its alpha stage of development. 
+> **Py-Templatify** is currently in its beta stage of development. 
 > As such, it is subject to change and may contain bugs or incomplete features.
 > I recommend using this library in non-critical applications or 
 > for experimental purposes only. 

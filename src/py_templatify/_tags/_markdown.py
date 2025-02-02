@@ -73,7 +73,7 @@ class CodeBlock[T](TagBase[T]):
         escape: Callable[[str], str] | Unset = UNSET,
         pre: str | Unset = UNSET,
         post: str | Unset = UNSET,
-        /,
+        *,
         code: str = '',
     ) -> None:
         super().__init__(val, escape, pre, post)

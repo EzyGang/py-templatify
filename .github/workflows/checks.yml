@@ -40,3 +40,27 @@ jobs:
         run: uv run task ruff-lint
       - name: Run mypy check
         run: uv run task mypy-lint
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+            enable-cache: true
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          allow-prereleases: true
+      - name: Install Dependencies
+        run: |
+          uv python install ${{ matrix.python }}
+          uv sync --all-extras
+      - name: Run tests
+        run: uv run task tests
