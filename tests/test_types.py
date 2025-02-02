@@ -59,16 +59,11 @@ class User:
 
 
 def sample_function(user: User) -> None:
-    """
-    Hello @{user.name}, you are {user.age} years old!
-    Info: {user.info}
-    """
+    """Hello @{user.name}, you are {user.age} years old! Info: {user.info}"""
 
 
 def sample_function_plain(username: str) -> None:
-    """
-    Hello {username}!
-    """
+    """Hello {username}!"""
 
 
 template_decorator = templatify(escape_symbols='@!')
@@ -93,7 +88,7 @@ def wrapped_instance_with_annotations():
 
 
 def test_init(wrapped_instance):
-    assert wrapped_instance._tpl == '\nHello @{user.name}, you are {user.age} years old!\nInfo: {user.info}\n'
+    assert wrapped_instance._tpl == 'Hello @{user.name}, you are {user.age} years old! Info: {user.info}'
     assert wrapped_instance._escape_symbols == {'@', '!'}
     assert isinstance(wrapped_instance._escape_func, Callable)
 
@@ -101,7 +96,7 @@ def test_init(wrapped_instance):
 def test_call(wrapped_instance):
     result = wrapped_instance(user=User(name='Alice', age=30, info='Some info'))
 
-    expected_result = '\nHello \\@Alice, you are 30 years old\\!\nInfo: Some info\n'
+    expected_result = 'Hello \\@Alice, you are 30 years old\\! Info: Some info'
     assert result == expected_result
 
     with pytest.raises(TypeError):
