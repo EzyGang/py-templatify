@@ -64,15 +64,7 @@ jobs:
           uv sync --all-extras
       - name: Run tests
         run: uv run task tests
-      - name: Rename file
-        env:
-          VER: ${{ matrix.python }}
-        run: mv ./coverage.json ./coverage-$VER.json
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.python }}.json
-          path: coverage-${{ matrix.python }}.json
       - name: Coveralls
         uses: coverallsapp/github-action@v2.3.6
         with:
-          file: coverage-${{ matrix.python }}.json
+          file: coverage.json
