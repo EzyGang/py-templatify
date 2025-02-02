@@ -93,13 +93,7 @@ def wrapped_instance_with_annotations():
 
 
 def test_init(wrapped_instance):
-    assert (
-        wrapped_instance._tpl
-        == """
-Hello @{user.name}, you are {user.age} years old!
-Info: {user.info}
-"""
-    )
+    assert wrapped_instance._tpl == '\nHello @{user.name}, you are {user.age} years old!\nInfo: {user.info}\n'
     assert wrapped_instance._escape_symbols == {'@', '!'}
     assert isinstance(wrapped_instance._escape_func, Callable)
 
@@ -107,10 +101,7 @@ Info: {user.info}
 def test_call(wrapped_instance):
     result = wrapped_instance(user=User(name='Alice', age=30, info='Some info'))
 
-    expected_result = """
-Hello \\@Alice, you are 30 years old\\!
-Info: Some info
-"""
+    expected_result = '\nHello \\@Alice, you are 30 years old\\!\nInfo: Some info\n'
     assert result == expected_result
 
     with pytest.raises(TypeError):
