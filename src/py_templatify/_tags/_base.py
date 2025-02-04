@@ -114,8 +114,7 @@ class IterableTagBase[T: SupportsIter](TagBase[Sequence[T]]):
             raise ValueError('Value must be set')
 
         elems = [
-            str(self.elem_tag(elem, escape=self.escape_func, pre=self.pre_elem, post=self.post_elem))
-            for elem in self._val
+            f'{self.pre_elem}{str(self.elem_tag(elem, escape=self.escape_func))}{self.post_elem}' for elem in self._val
         ]
         return f'{self.pre}{"".join(elems)}{self.post}'
 

@@ -1,6 +1,6 @@
 [project]
 name = "py-templatify"
-version = "0.2.4"
+version = "0.2.5"
 description = "Minimalist Python template generation with type-safe annotations. Perfect for chat bots and LLM prompts."
 license = "MIT"
 readme = "README.md"
