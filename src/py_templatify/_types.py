@@ -19,7 +19,9 @@ else:
 
 
 logger = logging.getLogger('py-templatify')
-_regex = re.compile(r'{(.+?\..+?)}')
+_attribute_regex = re.compile(r'{(.+?\..+?)}')
+_index_regex = re.compile(r'{(.+?(?:\[.+?\])+)}')
+_mixed_access_regex = re.compile(r'{(.+?\..+?(?:\[.+?\])+)}')
 _placehold_regex = re.compile(r'(\{[^\}]+?\})')
 
 
@@ -29,9 +31,7 @@ class WrappedProto[**_PS, CTX](Protocol):
     _ctx: CTX | None
     __wrapped__: Callable[_PS, str]
 
-    # def ctx(self: Self, context: CTX) -> Self: ...  # pragma: no cover
-
-    def __call__(self, *args: _PS.args, **kwargs: _PS.kwargs) -> str: ...  # pragma: no cover
+    def __call__(self, /, *args: _PS.args, **kwargs: _PS.kwargs) -> str: ...  # pragma: no cover
 
 
 def is_option(v: object) -> TypeIs[type[Option[Any]] | Option[Any]]:
@@ -43,7 +43,7 @@ def is_tag(v: object) -> TypeIs[type[TagBase[Any]] | TagBase[Any]]:
 
 
 class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
-    __wrapped__: Callable[_PS, str]
+    __wrapped__: Callable[_PS, str]  # type: ignore[unused-ignore]
 
     def __init__(self, signature: inspect.Signature, escape: str | None, func: Callable[_PS, Any], tpl: str):
         self._ctx: CTX | None = None
@@ -57,13 +57,14 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
         self._escape_regex = re.compile(f'({"|".join(f"\\{symbol}" for symbol in self._escape_symbols)})')
         self._escape_func = staticmethod(self._escape_func_factory())
 
-        self._used_attributes = re.findall(_regex, self._tpl)
+        # First find mixed accesses (attribute + index), then pure attribute accesses, then pure index accesses
+        self._used_mixed = re.findall(_mixed_access_regex, self._tpl)
+        self._used_attributes = [
+            attr for attr in re.findall(_attribute_regex, self._tpl) if attr not in self._used_mixed
+        ]
+        self._used_indices = [idx for idx in re.findall(_index_regex, self._tpl) if idx not in self._used_mixed]
 
-    # def ctx(self: Self, context: CTX) -> Self:
-    #     self._ctx = context
-    #     return self
-
-    def __call__(self, *args: _PS.args, **kwargs: _PS.kwargs) -> str:
+    def __call__(self, /, *args: _PS.args, **kwargs: _PS.kwargs) -> str:
         arguments, kwd_args = self._get_format_kwargs(bound_args=self._signature.bind(*args, **kwargs))
 
         _tpl = self._escape_tpl()
@@ -73,7 +74,7 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
         return _tpl.format(*arguments, **kwd_args)
 
     def _update_kwd_args_from_attributes(self, kwd_args: dict[str, Any], tpl: str) -> str:
-        if not self._used_attributes:
+        if not self._used_attributes and not self._used_indices and not self._used_mixed:
             return tpl
 
         param_values = self._get_parameter_values_from_objs_for_fields(kwd_args=kwd_args)
@@ -165,6 +166,15 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
     ) -> dict[str, tuple[inspect.Parameter | None, Any | None]]:
         annotations: dict[str, tuple[inspect.Parameter | None, Any | None]] = {}
 
+        self._process_attribute_access(annotations=annotations, kwd_args=kwd_args)
+        self._process_index_access(annotations=annotations, kwd_args=kwd_args)
+        self._process_mixed_access(annotations=annotations, kwd_args=kwd_args)
+
+        return annotations
+
+    def _process_attribute_access(
+        self, annotations: dict[str, tuple[inspect.Parameter | None, Any | None]], kwd_args: dict[str, Any]
+    ) -> None:
         # Going through all the attribute accesses that are used in the template
         for field in self._used_attributes:
             if '.' not in field:
@@ -191,7 +201,112 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
             )
             annotations[field] = (param, current_val)
 
-        return annotations
+    def _process_index_access(
+        self, annotations: dict[str, tuple[inspect.Parameter | None, Any | None]], kwd_args: dict[str, Any]
+    ) -> None:
+        # Going through all the index accesses that are used in the template
+        for field in self._used_indices:
+            # Extract the base object name and index
+            match = re.match(r'(.+?)\[(.+)\]', field)
+            if not match:
+                continue
+
+            obj_name, index = match.groups()
+            obj = kwd_args.get(obj_name)
+            obj_param = self._signature.parameters.get(obj_name, None)
+            if not obj or not obj_param:
+                annotations[field] = (None, None)
+                continue
+
+            # Split the index access into parts (e.g., "key1][key2" -> ["key1", "key2"])
+            index_parts = index.split('][')
+            current_val = obj
+            current_obj = obj
+
+            try:
+                # Process each level of indexing
+                for idx_part in index_parts:
+                    # Clean up the index part (remove quotes if present)
+                    idx = int(idx_part) if idx_part.isdigit() else idx_part.strip('"\'')
+
+                    # Try to access the current level
+                    current_val = current_obj[idx]
+                    current_obj = current_val
+                # If we got here, all levels of indexing succeeded
+                param = inspect.Parameter(
+                    name=f'{obj_name}_{"_".join(str(p).replace("'", "").replace('"', "") for p in index_parts)}',
+                    kind=inspect.Parameter.KEYWORD_ONLY,
+                    default=None,
+                    annotation=obj_param.annotation,
+                )
+                annotations[field] = (param, current_val)
+            except (IndexError, KeyError, TypeError):
+                # If any level of indexing fails, create parameter with None value
+                param = inspect.Parameter(
+                    name=f'{obj_name}_{"_".join(str(p).replace("'", "").replace('"', "") for p in index_parts)}',
+                    kind=inspect.Parameter.KEYWORD_ONLY,
+                    default=None,
+                    annotation=obj_param.annotation,
+                )
+                annotations[field] = (param, None)
+
+    def _process_mixed_access(  # noqa: C901
+        self, annotations: dict[str, tuple[inspect.Parameter | None, Any | None]], kwd_args: dict[str, Any]
+    ) -> None:
+        for field in self._used_mixed:
+            # Split into attribute part and index part
+            # e.g., "container.items[0]" -> ("container.items", "[0]")
+            attr_part = field[: field.find('[')]
+            index_parts = field[field.find('[') :].split('][')
+            index_parts = [p.strip('[]') for p in index_parts]
+
+            # First get the object through attribute access
+            parts = attr_part.split('.')
+            obj = kwd_args.get(parts[0])
+
+            if not obj:
+                annotations[field] = (None, None)
+                continue
+
+            current_val = obj
+            current_annotation = obj.__class__
+            for part in parts[1:]:
+                current_val = getattr(current_val, part, None)
+                current_annotation = current_annotation.__annotations__.get(part, Any)
+                if current_val is None:
+                    break
+
+            if current_val is None:
+                annotations[field] = (None, None)
+                continue
+
+            # Now handle the index access on the retrieved object
+            try:
+                for idx_part in index_parts:
+                    idx = int(idx_part) if idx_part.isdigit() else idx_part.strip('"\'')
+                    current_val = current_val[idx]
+
+                param = inspect.Parameter(
+                    name=(
+                        f'{attr_part.replace(".", "_")}_'
+                        f'{"_".join(str(p).replace("'", "").replace('"', "") for p in index_parts)}'
+                    ),
+                    kind=inspect.Parameter.KEYWORD_ONLY,
+                    default=None,
+                    annotation=current_annotation,
+                )
+                annotations[field] = (param, current_val)
+            except (IndexError, KeyError, TypeError):
+                param = inspect.Parameter(
+                    name=(
+                        f'{attr_part.replace(".", "_")}_'
+                        f'{"_".join(str(p).replace("'", "").replace('"', "") for p in index_parts)}'
+                    ),
+                    kind=inspect.Parameter.KEYWORD_ONLY,
+                    default=None,
+                    annotation=current_annotation,
+                )
+                annotations[field] = (param, None)
 
     def _escape_func_factory(self) -> Callable[[str], str]:
         def _escape_str(s: str, regex: re.Pattern[str]) -> str:

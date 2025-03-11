@@ -58,6 +58,12 @@ class User:
     info: str
 
 
+@dataclass
+class NestedUser:
+    name: str
+    user: User
+
+
 def sample_function(user: User) -> None:
     """Hello @{user.name}, you are {user.age} years old! Info: {user.info}"""
 
@@ -66,12 +72,21 @@ def sample_function_plain(username: str) -> None:
     """Hello {username}!"""
 
 
+def nested_function(user: NestedUser) -> None:
+    """Hello @{user.name}, you are {user.user.age} years old! Info: {user.user.info}"""
+
+
 template_decorator = templatify(escape_symbols='@!')
 
 
 @pytest.fixture
 def wrapped_instance():
     return template_decorator(sample_function)
+
+
+@pytest.fixture
+def wrapped_instance_nested():
+    return template_decorator(nested_function)
 
 
 @pytest.fixture
@@ -101,6 +116,13 @@ def test_call(wrapped_instance):
 
     with pytest.raises(TypeError):
         wrapped_instance(age=25)
+
+
+def test_call_nested(wrapped_instance_nested):
+    result = wrapped_instance_nested(user=NestedUser(name='Alice', user=User(name='Bob', age=25, info='Some info')))
+
+    expected_result = 'Hello \\@Alice, you are 25 years old\\! Info: Some info'
+    assert result == expected_result
 
 
 def test_update_kwd_args_from_attributes(wrapped_instance):
