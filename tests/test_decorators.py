@@ -1,5 +1,6 @@
 # ruff: noqa: E501
 from typing import Annotated
+
 import pytest
 
 from py_templatify import templatify
