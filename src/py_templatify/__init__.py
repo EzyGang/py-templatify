@@ -3,19 +3,6 @@ from ._tags._base import Boolean as Boolean
 from ._tags._base import IterableTagBase as IterableTagBase
 from ._tags._base import Option as Option
 from ._tags._base import TagBase as TagBase
-from . import markdown as markdown
-from . import shortcuts as shortcuts
-
-
-__all__ = [
-    'templatify',
-    'Boolean',
-    'IterableTagBase',
-    'Option',
-    'TagBase',
-    'markdown',
-    'shortcuts',
-]
 
 
 try:
