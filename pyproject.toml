@@ -1,13 +1,13 @@
 [project]
 name = "py-templatify"
-version = "0.2.5"
+version = "0.3.2"
 description = "Minimalist Python template generation with type-safe annotations. Perfect for chat bots and LLM prompts."
 license = "MIT"
 readme = "README.md"
 authors = [
     { name = "Galtozzy", email = "galtozzy+git@gmail.com" }
 ]
-requires-python = ">=3.12,<4"
+requires-python = ">=3.13,<4"
 dependencies = [
     "typing-extensions>=4.12.2 ; python_full_version < '3.13'",
 ]
@@ -20,7 +20,6 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python",
     "Typing :: Typed",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
