@@ -42,63 +42,31 @@ def is_tag(v: object) -> TypeIs[type[TagBase[Any]] | TagBase[Any]]:
     return isinstance(v, TagBase) or (inspect.isclass(v) and issubclass(v, TagBase))
 
 
-class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
-    __wrapped__: Callable[_PS, str]  # type: ignore[unused-ignore]
+def get_annotation_from_parameter(parameter: inspect.Parameter) -> Any | None:
+    # handle type alias annotation
+    type_alias_origin = get_type_alias_origin(parameter.annotation)
+    if type_alias_origin is not None:
+        return type_alias_origin
 
-    def __init__(self, signature: inspect.Signature, escape: str | None, func: Callable[_PS, Any], tpl: str):
-        self._ctx: CTX | None = None
+    # handle annotated as is
+    if get_origin(annotation := parameter.annotation) is Annotated:
+        return annotation
 
-        self._tpl = tpl
-        self._signature = signature
-        self._func = func
+    return None
 
-        self._escape_symbols = set(escape) if escape else set()
-        self._rand_from = list(set(string.punctuation + string.ascii_letters) - self._escape_symbols)
-        self._escape_regex = re.compile(f'({"|".join(f"\\{symbol}" for symbol in self._escape_symbols)})')
-        self._escape_func = staticmethod(self._escape_func_factory())
 
-        # First find mixed accesses (attribute + index), then pure attribute accesses, then pure index accesses
-        self._used_mixed = re.findall(_mixed_access_regex, self._tpl)
-        self._used_attributes = [
-            attr for attr in re.findall(_attribute_regex, self._tpl) if attr not in self._used_mixed
-        ]
-        self._used_indices = [idx for idx in re.findall(_index_regex, self._tpl) if idx not in self._used_mixed]
+def get_type_alias_origin(param_annotation: Any) -> None | Any:
+    try:
+        return alias_original if get_origin(alias_original := param_annotation.__value__) is Annotated else None
+    except Exception:
+        return None
 
-    def __call__(self, /, *args: _PS.args, **kwargs: _PS.kwargs) -> str:
-        arguments, kwd_args = self._get_format_kwargs(bound_args=self._signature.bind(*args, **kwargs))
 
-        _tpl = self._escape_tpl()
-        _tpl = self._update_kwd_args_from_attributes(kwd_args=kwd_args, tpl=_tpl)
-        self._update_kwd_args_with_annotations(kwd_args=kwd_args)
+class ParamValueTransformer:
+    def __init__(self, escape_func: Callable[[str], str]):
+        self._escape_func = escape_func
 
-        return _tpl.format(*arguments, **kwd_args)
-
-    def _update_kwd_args_from_attributes(self, kwd_args: dict[str, Any], tpl: str) -> str:
-        if not self._used_attributes and not self._used_indices and not self._used_mixed:
-            return tpl
-
-        param_values = self._get_parameter_values_from_objs_for_fields(kwd_args=kwd_args)
-        for field, (param, value) in param_values.items():
-            if not param:
-                continue
-
-            annotation = self._get_annotation_from_parameter(parameter=param)
-            kwd_args[param.name] = self._get_parameter_value_after_transforms(value=value, annotation=annotation)
-
-            tpl = tpl.replace(f'{{{field}}}', f'{{{param.name}}}')
-
-        return tpl
-
-    def _update_kwd_args_with_annotations(self, kwd_args: dict[str, Any]) -> None:
-        for kwd, value in kwd_args.items():
-            parameter = self._signature.parameters.get(kwd, None)
-            if not parameter:
-                continue
-
-            annotation = self._get_annotation_from_parameter(parameter=parameter)
-            kwd_args[kwd] = self._get_parameter_value_after_transforms(value=value, annotation=annotation)
-
-    def _get_parameter_value_after_transforms(self, value: Any, annotation: Any | None) -> Any:
+    def transform(self, value: Any, annotation: Any | None) -> Any:
         new_value: Any = value
 
         _is_escaped = False
@@ -140,26 +108,37 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
 
         return _is_escaped, new_value
 
-    def _get_annotation_from_parameter(self, parameter: inspect.Parameter) -> Any | None:
-        # handle type alias annotation
-        type_alias_origin = self._get_type_alias_origin(parameter.annotation)
-        if type_alias_origin is not None:
-            return type_alias_origin
 
-        # handle annotated as is
-        if get_origin(annotation := parameter.annotation) is Annotated:
-            return annotation
+class ComplexArgsKwargsProcessor:
+    def __init__(
+        self,
+        signature: inspect.Signature,
+        used_attributes: list[str],
+        used_indices: list[str],
+        used_mixed: list[str],
+        escape_func: Callable[[str], str],
+    ):
+        self._signature = signature
+        self._used_attributes = used_attributes
+        self._used_indices = used_indices
+        self._used_mixed = used_mixed
+        self._transformer = ParamValueTransformer(escape_func=escape_func)
 
-        return None
+    def process(self, kwd_args: dict[str, Any], tpl: str) -> str:
+        if not self._used_attributes and not self._used_indices and not self._used_mixed:
+            return tpl
 
-    def _get_format_kwargs(self, bound_args: inspect.BoundArguments) -> tuple[tuple[Any, ...], dict[str, Any]]:
-        bound_args.apply_defaults()
-        args_dict = bound_args.arguments
-        args: tuple[Any, ...] = args_dict.pop('args', ())
-        kwargs: dict[str, Any] = args_dict.pop('kwargs', {})
-        kwargs.update(args_dict)
+        param_values = self._get_parameter_values_from_objs_for_fields(kwd_args=kwd_args)
+        for field, (param, value) in param_values.items():
+            if not param:
+                continue
 
-        return args, kwargs
+            annotation = get_annotation_from_parameter(parameter=param)
+            kwd_args[param.name] = self._transformer.transform(value=value, annotation=annotation)
+
+            tpl = tpl.replace(f'{{{field}}}', f'{{{param.name}}}')
+
+        return tpl
 
     def _get_parameter_values_from_objs_for_fields(
         self, kwd_args: dict[str, Any]
@@ -308,6 +287,65 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
                 )
                 annotations[field] = (param, None)
 
+
+class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
+    __wrapped__: Callable[_PS, str]  # type: ignore[unused-ignore]
+
+    def __init__(self, signature: inspect.Signature, escape: str | None, func: Callable[_PS, Any], tpl: str):
+        self._ctx: CTX | None = None
+
+        self._tpl = tpl
+        self._signature = signature
+        self._func = func
+
+        self._escape_symbols = set(escape) if escape else set()
+        self._rand_from = list(set(string.punctuation + string.ascii_letters) - self._escape_symbols)
+        self._escape_regex = re.compile(f'({"|".join(f"\\{symbol}" for symbol in self._escape_symbols)})')
+        self._escape_func = staticmethod(self._escape_func_factory())
+        self._transformer = ParamValueTransformer(escape_func=self._escape_func)
+
+        # First find mixed accesses (attribute + index), then pure attribute accesses, then pure index accesses
+        self._used_mixed = re.findall(_mixed_access_regex, self._tpl)
+        self._used_attributes = [
+            attr for attr in re.findall(_attribute_regex, self._tpl) if attr not in self._used_mixed
+        ]
+        self._used_indices = [idx for idx in re.findall(_index_regex, self._tpl) if idx not in self._used_mixed]
+
+        self._complex_args_kwargs_processor = ComplexArgsKwargsProcessor(
+            signature=self._signature,
+            used_attributes=self._used_attributes,
+            used_indices=self._used_indices,
+            used_mixed=self._used_mixed,
+            escape_func=self._escape_func,
+        )
+
+    def __call__(self, /, *args: _PS.args, **kwargs: _PS.kwargs) -> str:
+        arguments, kwd_args = self._get_format_kwargs(bound_args=self._signature.bind(*args, **kwargs))
+
+        _tpl = self._escape_tpl()
+        _tpl = self._complex_args_kwargs_processor.process(kwd_args=kwd_args, tpl=_tpl)
+        self._update_kwd_args_with_annotations(kwd_args=kwd_args)
+
+        return _tpl.format(*arguments, **kwd_args)
+
+    def _update_kwd_args_with_annotations(self, kwd_args: dict[str, Any]) -> None:
+        for kwd, value in kwd_args.items():
+            parameter = self._signature.parameters.get(kwd, None)
+            if not parameter:
+                continue
+
+            annotation = get_annotation_from_parameter(parameter=parameter)
+            kwd_args[kwd] = self._transformer.transform(value=value, annotation=annotation)
+
+    def _get_format_kwargs(self, bound_args: inspect.BoundArguments) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        bound_args.apply_defaults()
+        args_dict = bound_args.arguments
+        args: tuple[Any, ...] = args_dict.pop('args', ())
+        kwargs: dict[str, Any] = args_dict.pop('kwargs', {})
+        kwargs.update(args_dict)
+
+        return args, kwargs
+
     def _escape_func_factory(self) -> Callable[[str], str]:
         def _escape_str(s: str, regex: re.Pattern[str]) -> str:
             return regex.sub(r'\\\1', s)
@@ -335,10 +373,3 @@ class Wrapped[**_PS, CTX](WrappedProto[_PS, CTX]):
             _tpl = _tpl.replace(f'{_prefix}{i}', placeholder)
 
         return _tpl
-
-    @staticmethod
-    def _get_type_alias_origin(param_annotation: Any) -> None | Any:
-        try:
-            return alias_original if get_origin(alias_original := param_annotation.__value__) is Annotated else None
-        except Exception:
-            return None

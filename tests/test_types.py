@@ -7,7 +7,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from py_templatify import Option, TagBase, templatify
-from py_templatify._types import Wrapped, is_option, is_tag
+from py_templatify._types import get_annotation_from_parameter, get_type_alias_origin, is_option, is_tag
 
 
 class CustomOption(Option):
@@ -130,7 +130,7 @@ def test_update_kwd_args_from_attributes(wrapped_instance):
     kwd_args = {'user': user}
     tpl = wrapped_instance._tpl
 
-    updated_tpl = wrapped_instance._update_kwd_args_from_attributes(kwd_args, tpl)
+    updated_tpl = wrapped_instance._complex_args_kwargs_processor.process(kwd_args, tpl)
 
     assert '{user_name}' in updated_tpl
     assert '{user_age}' in updated_tpl
@@ -143,17 +143,21 @@ def test_update_kwd_args_from_attributes_no_param(wrapped_instance, mocker: Mock
     tpl = wrapped_instance._tpl
 
     mocker.patch.object(
-        wrapped_instance, '_get_parameter_values_from_objs_for_fields', return_value={'user': (None, user)}
+        wrapped_instance._complex_args_kwargs_processor,
+        '_get_parameter_values_from_objs_for_fields',
+        return_value={'user': (None, user)},
     )
-    wrapped_instance._update_kwd_args_from_attributes(kwd_args, tpl)
+    wrapped_instance._complex_args_kwargs_processor.process(kwd_args, tpl)
 
 
 def test_update_kwd_args_from_attributes_plain(wrapped_instance_plain, mocker: MockerFixture):
     kwd_args = {'username': 'test'}
     tpl = wrapped_instance_plain._tpl
 
-    spy = mocker.spy(wrapped_instance_plain, '_get_parameter_values_from_objs_for_fields')
-    updated_tpl = wrapped_instance_plain._update_kwd_args_from_attributes(kwd_args, tpl)
+    spy = mocker.spy(
+        wrapped_instance_plain._complex_args_kwargs_processor, '_get_parameter_values_from_objs_for_fields'
+    )
+    updated_tpl = wrapped_instance_plain._complex_args_kwargs_processor.process(kwd_args, tpl)
 
     assert '{username}' in updated_tpl
     spy.assert_not_called()
@@ -170,7 +174,7 @@ def test_update_kwd_args_with_annotations(wrapped_instance_with_annotations):
 
 def test_get_parameter_value_after_transforms(wrapped_instance_with_annotations):
     value = 'Hello @Wrld!'
-    transformed_value = wrapped_instance_with_annotations._get_parameter_value_after_transforms(value, None)
+    transformed_value = wrapped_instance_with_annotations._transformer.transform(value, None)
 
     assert transformed_value == 'Hello \\@Wrld\\!'
 
@@ -179,10 +183,12 @@ def test_process_annotation_metadata(wrapped_instance_with_annotations):
     def mock_escape_func_factory():
         return lambda s: s.replace('Hello', 'Hi')
 
-    wrapped_instance_with_annotations._escape_func = mock_escape_func_factory()
+    wrapped_instance_with_annotations._transformer._escape_func = mock_escape_func_factory()
 
     metadata = [TagBase(pre='<T>', post='</T>')]
-    is_escaped, new_value = wrapped_instance_with_annotations._process_annotation_metadata('Hello there!', metadata)
+    is_escaped, new_value = wrapped_instance_with_annotations._transformer._process_annotation_metadata(
+        'Hello there!', metadata
+    )
 
     assert is_escaped
     assert new_value == '<T>Hi there!</T>'
@@ -190,7 +196,9 @@ def test_process_annotation_metadata(wrapped_instance_with_annotations):
 
 def test_process_annotation_metadata_no_callable(wrapped_instance_with_annotations):
     metadata = ['not a callable']
-    is_escaped, new_value = wrapped_instance_with_annotations._process_annotation_metadata('Hello there!', metadata)
+    is_escaped, new_value = wrapped_instance_with_annotations._transformer._process_annotation_metadata(
+        'Hello there!', metadata
+    )
 
     assert not is_escaped
     assert new_value == 'Hello there!'
@@ -198,7 +206,9 @@ def test_process_annotation_metadata_no_callable(wrapped_instance_with_annotatio
 
 def test_process_annotation_metadata_callable(wrapped_instance_with_annotations):
     metadata = [lambda x: 'replacedvalue']
-    is_escaped, new_value = wrapped_instance_with_annotations._process_annotation_metadata('Hello there!', metadata)
+    is_escaped, new_value = wrapped_instance_with_annotations._transformer._process_annotation_metadata(
+        'Hello there!', metadata
+    )
 
     assert not is_escaped
     assert new_value == 'replacedvalue'
@@ -206,13 +216,13 @@ def test_process_annotation_metadata_callable(wrapped_instance_with_annotations)
 
 def test_process_annotation_metadata_option_resume(wrapped_instance_with_annotations):
     metadata = [Option(if_none='No', resume=True), TagBase(pre='<T>', post='</T>')]
-    is_escaped, new_value = wrapped_instance_with_annotations._process_annotation_metadata(None, metadata)
+    is_escaped, new_value = wrapped_instance_with_annotations._transformer._process_annotation_metadata(None, metadata)
 
     assert is_escaped
     assert new_value == '<T>No</T>'
 
     metadata = [Option(if_none='No', resume=False), TagBase(pre='<T>', post='</T>')]
-    is_escaped, new_value = wrapped_instance_with_annotations._process_annotation_metadata(None, metadata)
+    is_escaped, new_value = wrapped_instance_with_annotations._transformer._process_annotation_metadata(None, metadata)
 
     assert is_escaped
     assert new_value == 'No'
@@ -231,8 +241,10 @@ def test_get_parameter_values_from_objs_for_fields(wrapped_instance):
     user = User(name='Alice', age=30, info='Some info')
     kwd_args = {'user': user}
 
-    wrapped_instance._used_attributes.extend(['test_attr_no_dot', 'test_obj.non_existent'])
-    values = wrapped_instance._get_parameter_values_from_objs_for_fields(kwd_args)
+    wrapped_instance._complex_args_kwargs_processor._used_attributes.extend(
+        ['test_attr_no_dot', 'test_obj.non_existent']
+    )
+    values = wrapped_instance._complex_args_kwargs_processor._get_parameter_values_from_objs_for_fields(kwd_args)
 
     assert 'user.name' in values
     assert 'test_attr_no_dot' not in values
@@ -267,7 +279,7 @@ ParamAnnotationVar = Annotated[TestType, 'metadata']
 
 
 def test_get_type_alias_origin():
-    assert Wrapped._get_type_alias_origin(ParamAnnotation) is Annotated[TestType, 'metadata']
+    assert get_type_alias_origin(ParamAnnotation) is Annotated[TestType, 'metadata']
     assert ParamAnnotationVar is Annotated[TestType, 'metadata']
 
 
@@ -275,9 +287,9 @@ def test_get_annotation_from_parameter(wrapped_instance_with_annotations):
     d = {'name': 'user', 'kind': inspect.Parameter.POSITIONAL_OR_KEYWORD, 'default': None}
     param = inspect.Parameter(**d, annotation=Annotated[User, (opt := Option())])
 
-    annotation = wrapped_instance_with_annotations._get_annotation_from_parameter(param)
+    annotation = get_annotation_from_parameter(param)
     assert annotation == Annotated[User, opt]
 
     param = inspect.Parameter(**d, annotation=ParamAnnotation)
-    annotation = wrapped_instance_with_annotations._get_annotation_from_parameter(param)
+    annotation = get_annotation_from_parameter(param)
     assert annotation == Annotated[TestType, 'metadata']
